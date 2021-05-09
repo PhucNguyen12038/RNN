@@ -6,6 +6,9 @@ from feature_extraction import createVocabulary, createInputList, sanitizer
 import random
 from maths import softmax
 
+def softmax(xs):
+  # Applies the Softmax Function to the input array.
+  return np.exp(xs) / sum(np.exp(xs))
 
 class RNN:
   # A many-to-one Vanilla Recurrent Neural Network.
@@ -90,18 +93,18 @@ class RNN:
     self.bh -= learn_rate * d_bh
     self.by -= learn_rate * d_by
 
-  def saveModel(self, train_data_size, numLoop):
+  def saveModel(self):
     WB_dict = {'Wxh': self.Wxh, 'Whh': self.Whh, 'Why': self.Why,
                'bh': self.bh, 'by': self.by}
 
     dumped = json.dumps(WB_dict, cls=NumpyEncoder)
-    with open("model_rnn_"+str(train_data_size)+"_"+str(numLoop)+".json", "w") as fp:
+    with open("model_rnn.json", "w") as fp:
       json.dump(dumped, fp)
 
     fp.close()
 
   def loadModel(self):
-    with open('model_rnn_300_400.json.json', 'r') as f:
+    with open('model_rnn.json', 'r') as f:
       jsonData = json.load(f)
     WB_dict = json.loads(jsonData)
     f.close()
@@ -122,33 +125,20 @@ def rnnProcessData(rnn, data, backprop=True):
 
   for x, y in items:
     inputs = createInputList(x, vocab_size, word_to_idx)
-    target = list(set(y))
+    target = int(y[0])
 
     # Forward
     out, _ = rnn.forward(inputs)
     probs = softmax(out)
 
-    # Calculate loss by average of log of probability of all correct class
-    avg_loss = np.average(np.log(probs[target]))
-    loss -= avg_loss
-
-    # Calculate accuracy
-    probs_replica = probs.copy()
-    preds = []
-    for i in target:
-      pred = np.argmax(probs_replica)
-      preds.append(pred)
-      probs_replica[pred] = 0
-
-    target.sort()
-    preds.sort()
-    if (target == preds):
-      num_correct += 1
+    # Calculate loss / accuracy
+    loss -= np.log(probs[target])
+    num_correct += int(np.argmax(probs) == target)
 
     if backprop:
       # Build dL/dy
       d_L_d_y = probs
-      d_L_d_y[target] -= 1 / len(target) # the main reason
+      d_L_d_y[target] -= 1
 
       # Backward
       rnn.backprop(d_L_d_y)
@@ -176,7 +166,7 @@ def rnnTrain(rnn, train_data, numLoop):
       # print('Test:\tLoss %.3f | Accuracy: %.3f' % (test_loss, test_acc))
 
   # Save model
-  rnn.saveModel(len(train_data), numLoop)
+  rnn.saveModel()
 
 
 def get_train_data():
@@ -188,29 +178,12 @@ def get_train_data():
   f.close()
   return data
 
-def get_val_data():
-  path = '/Users/nguyenphuc/Documents/Python/SocialMediaBullyDetect/social_media_cyberbullying_detection/RNN_source/social_media_cyberbullying_detection/datasets/MMHS/'
-  fn = 'val_data_text_labels.json'
-
-  f = open(path + fn, 'r')
-  data = json.load(f)  # size is 1002
-  f.close()
-  return data
-
-def get_test_data():
-  path = '/Users/nguyenphuc/Documents/Python/SocialMediaBullyDetect/social_media_cyberbullying_detection/RNN_source/social_media_cyberbullying_detection/datasets/MMHS/'
-  fn = 'test_data_text_labels.json'
-
-  f = open(path + fn, 'r')
-  data = json.load(f)  # size is 1002
-  f.close()
-  return data
-
 
 train_data = get_train_data()
-# test_data = get_test_data()
+
 vocab_size, word_to_idx = createVocabulary(train_data)
 
 rnn = RNN(vocab_size, 6)
-rnnTrain(rnn, train_data, 100)
+rnnTrain(rnn, train_data, 400)
+
 
